@@ -16,7 +16,9 @@ const postSchema = new mongoose.Schema({
   liked: { type: Array },
   ip_address: {type: Array},
   post_views: {type: Number, default: 0},
-  imagepath: {type: String, required: true}
+  imagepath: {type: String, required: true},
+  requests: {type: Array, required: true},
+  report: {type: Array}
 });
 
 export const Post = mongoose.model("Post", postSchema);

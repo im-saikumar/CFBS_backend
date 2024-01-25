@@ -1,7 +1,8 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
+
 export const PORT = process.env.PORT || 8000;
-export const mongoDBURL = "mongodb+srv://sai24121994:qKxX9MJp4mfhMuOi@cfbs.g5rykk0.mongodb.net/CFBSDB?retryWrites=true&w=majority";
+export const mongoDBURL = process.env.MONGODB_URL;
 
 export const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
 export const AWS_SECRET_ACCESS_KEY =  process.env.AWS_SECRET_ACCESS_KEY;

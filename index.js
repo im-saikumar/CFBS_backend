@@ -87,8 +87,52 @@ app.post('/upload_post', upload.single('image'), async (req, res) => {
         comment: [],
         liked: [],
         saved: [],
+        requests :[],
+        report:[]
       };
       const result = await Post.create(newPost);
+      return res.status(200).json({message: "success"});
+  } catch (error) {
+      console.error(error.stack);
+      res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/upload_request', upload.single('image'), async (req, res) => {
+
+  const {name, id, email, description} = req.body
+
+  try {
+    if (!description || !id) {
+      return res.status(400).send({
+        message: "send id & description",
+      });
+    }
+    // const headingText = req.body.headingText;
+    const { originalname, buffer, mimetype } = req.file;  
+      const params = {
+          Bucket: AWS_S3_BUCKET_NAME,
+          Key: originalname,
+          Body: buffer,
+          ContentType: mimetype
+      };
+
+      await s3.upload(params).promise();
+      await Post.updateOne(
+        { _id: id },
+        {
+          $push: {
+            requests: {
+              id: new ObjectId(),
+              name: name,
+              date: new Date(),
+              description: description,
+              email: email,
+              imagepath : `https://${AWS_S3_BUCKET_NAME}.s3.${S3_REGION}.amazonaws.com/${params.Key}`, 
+            },
+          },
+        }
+      );
       return res.status(200).json({message: "success"});
   } catch (error) {
       console.error(error.stack);
@@ -115,8 +159,9 @@ mongoose
 //////////////// get posts /////////////////////////////
 
 app.get("/post", async (req, res) => {
+  const {status} = req.query
   try {
-    const getPost = await Post.find({}).sort( { _id:-1 } );
+    const getPost = await Post.find({status : status}).sort( { _id:-1 } );
     return res
       .status(200)
       .json(
@@ -124,6 +169,8 @@ app.get("/post", async (req, res) => {
           id: data.id,
           createdAt: data.createdAt.toLocaleDateString('en-IN', options),
           heading: data.title,
+          state : data.state,
+          district: data.district,
           description: data.description,
           name: data.visiblity ? data.name : "Anonymous",
           imagepath: data.imagepath,
@@ -168,7 +215,7 @@ app.post("/post_details", async (req, res) => {
           state: getPost.state,
           district : getPost.district,
           status : getPost.status,
-          name: getPost.visiblity ? getPost.name : "",
+          name: getPost.visiblity ? getPost.name : "Anonymous",
           email : (email === getPost.email ? getPost.email : "***********"), 
           imagepath: getPost.imagepath,
           likes: getPost['liked']?.length,
@@ -176,7 +223,16 @@ app.post("/post_details", async (req, res) => {
           you_liked: getPost['liked']?.includes(getPost.email),
           you_saved: getPost['saved']?.includes(getPost.email),
           views: getPost['ip_address']?.length,
-          saves: getPost['saved']?.length
+          saves: getPost['saved']?.length,
+          requests : getPost['requests'].map(data => 
+            ({
+              id: data.id,
+              email : (getPost.visiblity || data.email !== getPost.email) ? data.email : "***********",
+              name: (getPost.visiblity || data.email !== getPost.email) ? data.name : "Post Author (Anonymous)",
+              imagepath: data.imagepath,
+              date: data.date.toLocaleDateString('en-IN', options),
+              description: data.description,
+            })),
     });
   } catch (err) {
     console.log(err.message);
@@ -184,30 +240,51 @@ app.post("/post_details", async (req, res) => {
   }
 });
 
+//////////////// edit post details /////////////////////////////
+
+app.post("/edit_post", async (req, res) => {
+  const {id, email, heading, subheading, description} = req.body
+  if (!id || !heading || !description ){
+    return res.status(400).send({
+      message: "please send id, heading & description",
+    });
+  }
+  try {
+    const editPost = await Post.updateOne({ email : email, _id: id },
+      { $set : 
+        { 
+          title : heading,
+          sub_heading: subheading,
+          description : description,
+        }});
+    return res.status(200).json({message: "successfully updated"});
+  } catch (err) {
+    res.status(500).send({ message: err.message });
+  }
+})
+
 //////////////// comments /////////////////////////////
 
 app.post("/add_comment", async (req, res) => {
-  const add_comment = {
-    id: req.body.id,
-    comment: req.body.comment,
-    name: req.body.name,
-  };
 
-  if (!req.body.id || !req.body.comment || !req.body.name) {
+  const {id, comment, name, email} = req.body
+
+  if (!id || !comment || !name) {
     return res.status(400).send({
       message: "please send id, comment & name",
     });
   }
   try {
     await Post.updateOne(
-      { _id: add_comment.id },
+      { _id: id },
       {
         $push: {
           comment: {
             id: new ObjectId(),
-            name: add_comment.name,
-            date: new Date()?.toLocaleDateString('en-IN', options),
-            comment: add_comment.comment,
+            name: name,
+            email: email,
+            date: new Date(),
+            comment: comment,
           },
         },
       }
@@ -230,9 +307,15 @@ app.get("/get_comments", async (req, res) => {
     }); 
   }
   try {
-    const data = await Post.findOne({ _id: add_comment.id})
-    const showComments = data.comment
-    return res.status(200).json(showComments);
+    const findData = await Post.findOne({ _id: add_comment.id})
+    const uservisible = findData.visiblity 
+    const showComments = findData.comment
+    return res.status(200).json(showComments.map(data => ({
+      id: data.id,
+      name: !uservisible && data.email === findData.email ?  "Post Author (Anonymous)" : data.name,
+      date: new Date(data.date)?.toLocaleDateString('en-IN', options),
+      comment: data.comment,
+    })));
   } catch (err) {
     console.log(err.message);
     res.status(500).send({ message: err.message });
@@ -407,7 +490,16 @@ app.get("/your_articles", async (req, res) => {
         you_liked: data['liked']?.includes(data.email),
         you_saved: data['saved']?.includes(data.email),
         views: data['ip_address']?.length,
-        saves: data['saved']?.length
+        saves: data['saved']?.length,
+        requests : data['requests'].map(data => 
+          ({
+            id: data.id,
+            email : (data.email === getPost.email ? data.email : "***********"),
+            name: (getPost.visiblity && data.email === getPost.email) ? data.name : "Anonymous",
+            imagepath: data.imagepath,
+            date: data.date.toLocaleDateString('en-IN', options),
+            description: data.description,
+          })),
     })
     ));
   } catch (err) {
@@ -436,7 +528,7 @@ app.post("/take_view", async (req, res) => {
         { _id: add_IP.id },
         { $push: { ip_address: add_IP.ip }}
       )
-    return res.status(200).json(result ? "Viewed" : "alread Viewed");
+    return res.status(200).json(result ? "Viewed" : "already Viewed");
   } catch (err) {
     console.log(err.message);
     res.status(500).send({ message: err.message });
@@ -447,8 +539,9 @@ app.post("/take_view", async (req, res) => {
 
 app.post('/notification', async (req, res) => {
 
-  const {name, title, parent_post_email, parent_post_id} = req.body;
-
+  const {name, title, parent_post_id} = req.body;
+  const findById = await Post.findOne({_id: parent_post_id})
+  const parentEmail = findById.email
   try {
     if (!title || !name) {
       return res.status(400).send({
@@ -459,7 +552,7 @@ app.post('/notification', async (req, res) => {
         name: name,
         title: title,
         parent_post_id: parent_post_id,
-        parent_post_email: parent_post_email,
+        parent_post_email: parentEmail,
         read_status: false,
       };
       const result = await Notifications.create(newNotification);
@@ -486,7 +579,6 @@ app.get("/get_notifications", async (req, res) => {
         id: data.id,
         date: data.createdAt.toLocaleDateString('en-IN', options),
         name : data.name,
-        postEmail : data.parent_post_email,
         postId : data.parent_post_id,
         read : data.read_status,
         title : data.title,
@@ -506,12 +598,59 @@ app.post("/read_notification", async (req, res) => {
     });
   }
   try {
-    const readStatus = await Notifications.updateOne({ parent_post_email: email, _id: id },{ $set : { read_status : true }});
+    const readStatus = await Notifications.updateOne({ parent_post_email : email, _id: id },{ $set : { read_status : true }});
     return res.status(200).json(readStatus);
   } catch (err) {
     res.status(500).send({ message: err.message });
   }
 });
+
+
+///////////////// approved to close /////////////////////
+
+app.post("/apporved", async (req, res) => {
+
+  const {email, id, apporve} = req.body;
+
+  if (!email || !id) {
+    return res.status(400).send({
+      message: "please send email & id",
+    });
+  }
+  try {
+    const readStatus = await Post.updateOne({ email: email, _id: id },{ $set : { status : apporve ? "closed" : "pending" }});
+    return res.status(200).json(readStatus);
+  } catch (err) {
+    res.status(500).send({ message: err.message });
+  }
+});
+
+///////////////// for reporting /////////////////////
+
+app.post("/reporting", async (req, res) => {
+  
+  const {email, id} = req.body
+
+  if (!id || !email) {
+    return res.status(400).send({
+      message: "please send id & email",
+    });
+  }
+  try {
+    const findById = await Post.findOne({ _id: id })
+    const result = (!findById.report.includes(email)) && 
+      await Post.updateOne(
+        { _id: id },
+        { $push: { report: email }}
+      )
+    return res.status(200).json({message : result ? "reported successfully" : "you already reported"});
+  } catch (err) {
+    console.log(err.message);
+    res.status(500).send({ message: err.message });
+  }
+});
+
+
 
 
 ///////////////// google Auth /////////////////////
