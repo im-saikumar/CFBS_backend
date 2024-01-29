@@ -11,6 +11,7 @@ import cors from 'cors';
 import axios from 'axios';
 import { jwtDecode } from "jwt-decode";
 import { ObjectId } from "mongodb";
+import { ContactUs } from "./contact.js";
 
 
 const app = express();
@@ -91,7 +92,7 @@ app.post('/upload_post', upload.single('image'), async (req, res) => {
         report:[]
       };
       const result = await Post.create(newPost);
-      return res.status(200).json({message: "success"});
+      return res.status(200).json({message: "Successfully uploaded"});
   } catch (error) {
       console.error(error.stack);
       res.status(500).json({ error: error.message });
@@ -133,7 +134,7 @@ app.post('/upload_request', upload.single('image'), async (req, res) => {
           },
         }
       );
-      return res.status(200).json({message: "success"});
+      return res.status(200).json({message: "Successfully uploaded"});
   } catch (error) {
       console.error(error.stack);
       res.status(500).json({ error: error.message });
@@ -605,6 +606,25 @@ app.post("/read_notification", async (req, res) => {
   }
 });
 
+app.delete("/clear_notifications", async (req, res) => {
+
+  const {email} = req.body;
+
+  if (!email) {
+    return res.status(400).send({
+      message: "please send email",
+    });
+  }
+  try {
+
+    await Notifications.deleteMany({ parent_post_email: email});
+    return res.status(200).json({message : "notifications has been deleted successfully"});
+  } catch (err) {
+    console.log(err.message);
+    res.status(500).send({ message: err.message });
+  }
+});
+
 
 ///////////////// approved to close /////////////////////
 
@@ -650,6 +670,33 @@ app.post("/reporting", async (req, res) => {
   }
 });
 
+
+/////////////////////// contact us ////////////////////////////
+
+app.post("/contact_us", async (req, res) => {  
+  const {name, mobile, email, message} = req.body
+
+  if (!name || !mobile || !email || !message) {
+    return res.status(400).send({
+      message: "please fill all details",
+    });
+  }
+  try {
+
+    const newContactus = {
+      name: name,
+      mobile: mobile,
+      email: email,
+      message: message,
+    };
+
+    await ContactUs.create(newContactus);
+    return res.status(200).json({message: "registered successfully"});  
+  } catch (err) {
+    console.log(err.message);
+    res.status(500).send({ message: err.message });
+  }
+});
 
 
 
