@@ -160,7 +160,7 @@ mongoose
 //////////////// get posts /////////////////////////////
 
 app.get("/post", async (req, res) => {
-  const {status} = req.query
+  const {email, status} = req.query
   try {
     const getPost = await Post.find({status : status}).sort( { _id:-1 } );
     return res
@@ -171,14 +171,14 @@ app.get("/post", async (req, res) => {
           createdAt: data.createdAt.toLocaleDateString('en-IN', options),
           heading: data.title,
           state : data.state,
-          district: data.district,
-          description: data.description,
+          district: data.district.length > 20 ? data.district.slice(0,20)+"..." : data.district,
+          description: data.description.length > 40 ? data.description.slice(0,40)+"..." : data.description,
           name: data.visiblity ? data.name : "Anonymous",
           imagepath: data.imagepath,
           likes: data.liked?.length,
           comments: data.comment?.length,
-          you_liked: data.liked?.includes(data.email),
-          you_saved: data.saved?.includes(data.email),
+          you_liked: data.liked?.includes(email),
+          you_saved: data.saved?.includes(email),
           views: data.ip_address?.length,
           saves: data.saved?.length
         }))
@@ -221,8 +221,8 @@ app.post("/post_details", async (req, res) => {
           imagepath: getPost.imagepath,
           likes: getPost['liked']?.length,
           comments: getPost['comment']?.length,
-          you_liked: getPost['liked']?.includes(getPost.email),
-          you_saved: getPost['saved']?.includes(getPost.email),
+          you_liked: getPost['liked']?.includes(email),
+          you_saved: getPost['saved']?.includes(email),
           views: getPost['ip_address']?.length,
           saves: getPost['saved']?.length,
           requests : getPost['requests'].map(data => 
@@ -430,17 +430,16 @@ app.post("/save", async (req, res) => {
 
 
 app.get("/your_saved", async (req, res) => {
-  const your_saved = {
-    saved: req.query.email,
-  };
 
-  if (!req.query.email) {
+  const {email} = req.query
+
+  if (!email) {
     return res.status(400).send({
       message: "please send email",
     });
   }
   try {
-    const getPost = await Post.find({ saved: your_saved.saved });
+    const getPost = await Post.find({ saved: email });
     return res.status(200).json(
       getPost.map((data) => ({
           id: data.id,
@@ -452,8 +451,8 @@ app.get("/your_saved", async (req, res) => {
           imagepath: data.imagepath,
           likes: data['liked']?.length,
           comments: data['comment']?.length,
-          you_liked: data['liked']?.includes(data.email),
-          you_saved: data['saved']?.includes(data.email),
+          you_liked: data['liked']?.includes(email),
+          you_saved: data['saved']?.includes(email),
           views: data['ip_address']?.length,
           saves: data['saved']?.length
       })
@@ -466,16 +465,16 @@ app.get("/your_saved", async (req, res) => {
 //////////////// get your posts /////////////////////////////
 
 app.get("/your_articles", async (req, res) => {
-  const get_myArticles = {
-    myArticle: req.query.email,
-  };
-  if (!req.query.email) {
+
+  const {email} = req.query
+
+  if (!email) {
     return res.status(400).send({
       message: "please send email",
     });
   }
   try {
-    const getPost = await Post.find({ "email": get_myArticles.myArticle });
+    const getPost = await Post.find({ "email": email});
     return res.status(200).json(
       getPost.map((data) => ({
         id: data.id,
@@ -488,8 +487,8 @@ app.get("/your_articles", async (req, res) => {
         imagepath: data.imagepath,
         likes: data['liked']?.length,
         comments: data['comment']?.length,
-        you_liked: data['liked']?.includes(data.email),
-        you_saved: data['saved']?.includes(data.email),
+        you_liked: data['liked']?.includes(email),
+        you_saved: data['saved']?.includes(email),
         views: data['ip_address']?.length,
         saves: data['saved']?.length,
         requests : data['requests'].map(data => 
