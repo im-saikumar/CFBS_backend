@@ -4,13 +4,12 @@
 # If you need more help, visit the Dockerfile reference guide at
 # https://docs.docker.com/go/dockerfile-reference/
 
-ARG NODE_VERSION=21.2.0
+ARG NODE_VERSION=20.11.0
 
 FROM node:${NODE_VERSION}-alpine
 
 # Use production node environment by default.
 ENV NODE_ENV production
-
 
 WORKDIR /usr/src/app
 
@@ -33,4 +32,4 @@ COPY . .
 EXPOSE 8000
 
 # Run the application.
-CMD npm start
+CMD npm run dev
